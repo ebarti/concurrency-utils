@@ -32,7 +32,7 @@ func TestOrDone(t *testing.T) {
 		}()
 		return c
 	}
-	_ = sig(1, 1 * time.Hour)
+	_ = sig(1, 1*time.Hour)
 }
 
 func TestTee(t *testing.T) {
@@ -46,18 +46,14 @@ func TestTee(t *testing.T) {
 		}()
 		return retChan
 	}
-	c1, c2 := Tee(nil, genVals())
-	var c1v, c2v []interface{}
+
+	c1, c2, c3, c4 := make(chan interface{}), make(chan interface{}), make(chan interface{}), make(chan interface{})
+	var c1v, c2v, c3v, c4v []interface{}
+	Tee(nil, genVals(), c1, c2, c3, c4)
 	for c := range c1 {
 		c1v = append(c1v, c)
 		c2v = append(c2v, <-c2)
-	}
-
-	if len(c1v) != 10 {
-		t.Error("Not enough outs")
-	}
-	if len(c2v) != 10 {
-		t.Error("Not enough outs")
+		c3v = append(c3v, <-c3)
+		c4v = append(c4v, <-c4)
 	}
 }
-

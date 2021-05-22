@@ -1,5 +1,9 @@
 package concurrencyutils
 
+import (
+	"reflect"
+)
+
 func Bridge(done <-chan interface{}, chanStream <-chan <-chan interface{}) <-chan interface{} {
 	valStream := make(chan interface{})
 	go func() {
@@ -48,27 +52,28 @@ func OrDone(done, c <-chan interface{}) <-chan interface{} {
 	return valStream
 }
 
-//goland:noinspection GoNilness
-func Tee(done <-chan interface{}, in <-chan interface{}) (_, _ <-chan interface{}) {
-	out1 := make(chan interface{})
-	out2 := make(chan interface{})
+func Tee(done <-chan interface{}, in <-chan interface{}, receivers ...chan<- interface{}) {
+	cases := make([]reflect.SelectCase, len(receivers))
 	go func() {
-		defer close(out1)
-		defer close(out2)
-		for val := range OrDone(done, in) {
-			var out1shadow, out2shadow = out1, out2
-			for i := 0; i < 2; i++ {
-				select {
-				case <-done:
-				case out1shadow <- val:
-					out1shadow = nil
-				case out2shadow <- val:
-					out2shadow = nil
-				}
+		defer func() {
+			for i := range receivers {
+				close(receivers[i])
+			}
+		}()
+		for i := range cases {
+			cases[i].Dir = reflect.SelectSend
+		}
+		for elem := range in {
+			for i := range cases {
+				cases[i].Chan = reflect.ValueOf(receivers[i])
+				cases[i].Send = reflect.ValueOf(elem)
+			}
+			for _ = range cases {
+				chosen, _, _ := reflect.Select(cases)
+				cases[chosen].Chan = reflect.ValueOf(nil)
 			}
 		}
 	}()
-	return out1, out2
 }
 
 func Take(done <-chan interface{}, valueStream <-chan interface{}, num int) <-chan interface{} {
@@ -102,4 +107,3 @@ func Repeat(done <-chan interface{}, values ...interface{}) <-chan interface{} {
 	}()
 	return valueStream
 }
-
