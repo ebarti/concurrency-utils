@@ -43,7 +43,7 @@ func TestTee(t *testing.T) {
 
 	c1, c2, c3, c4 := make(chan interface{}), make(chan interface{}), make(chan interface{}), make(chan interface{})
 	var c1v, c2v, c3v, c4v []interface{}
-	Tee(nil, genVals(), c1, c2, c3, c4)
+	Tee(genVals(), c1, c2, c3, c4)
 	for c := range c1 {
 		c1v = append(c1v, c)
 		c2v = append(c2v, <-c2)
@@ -77,7 +77,7 @@ func TestOrDone(t *testing.T) {
 		{
 			name: "Test never done",
 			args: args{
-				sendDoneAtIdx: 99,
+				sendDoneAtIdx: -1,
 				c:             []interface{}{0, 1, 2, 3, 4, 5, 6, 7},
 			},
 			want: []interface{}{0, 1, 2, 3, 4, 5, 6, 7},
@@ -120,7 +120,7 @@ func TestOrDone(t *testing.T) {
 				i := 0
 				for gotValue := range got {
 					if !reflect.DeepEqual(gotValue, tt.want[i]) {
-						t.Errorf("OrDone() = %v, want %v", gotValue, tt.want[i])
+						t.Errorf("OrDone() = got %v, but wanted %v", gotValue, tt.want[i])
 					}
 					i++
 				}
@@ -134,10 +134,94 @@ func TestOrDone(t *testing.T) {
 }
 
 func TestTake(t *testing.T) {
+	valueStreamFn := func(doneAtIdx int, value interface{}) (_, _ <-chan interface{}) {
+		valueStream := make(chan interface{}, 1)
+		doneStream := make(chan interface{}, 1)
+
+		go func() {
+			defer func() {
+				close(valueStream)
+				close(doneStream)
+			}()
+			i := 0
+			for {
+				if i == doneAtIdx {
+					for len(valueStream) > 0 {
+						// block
+					}
+					doneStream <- 1
+					break
+				}
+				valueStream <- value
+				i++
+			}
+		}()
+		return valueStream, doneStream
+	}
 	type args struct {
-		done        <-chan interface{}
-		valueStream <-chan interface{}
-		num         int
+		sendDoneAtIdx int
+		value         interface{}
+		num           int
+	}
+	tests := []struct {
+		name string
+		args args
+		want []interface{}
+	}{
+		{
+			name: "When done takes no values",
+			args: args{
+				sendDoneAtIdx: 0,
+				value:         0,
+				num:           10,
+			},
+			want: nil,
+		},
+		{
+			name: "When never done takes all values",
+			args: args{
+				sendDoneAtIdx: -1,
+				value:         0,
+				num:           10,
+			},
+			want: []interface{}{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+		},
+		{
+			name: "When done in the middle takes only values up to done",
+			args: args{
+				sendDoneAtIdx: 4,
+				value:         0,
+				num:           10,
+			},
+			want: []interface{}{0, 0, 0, 0, 0},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			valueStream, doneStream := valueStreamFn(tt.args.sendDoneAtIdx, tt.args.value)
+			got := Take(doneStream, valueStream, tt.args.num)
+			if tt.want != nil {
+				i := 0
+				for gotValue := range got {
+					if !reflect.DeepEqual(gotValue, tt.want[i]) {
+						t.Errorf("Take() = got %v, but wanted %v", gotValue, tt.want[i])
+					}
+					i++
+				}
+			} else {
+				if len(got) > 0 {
+					t.Error("Got values but shouldn't have")
+				}
+			}
+		})
+	}
+}
+
+func TestRepeat(t *testing.T) {
+	type args struct {
+		done   <-chan interface{}
+		values []interface{}
 	}
 	tests := []struct {
 		name string
@@ -148,8 +232,8 @@ func TestTake(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Take(tt.args.done, tt.args.valueStream, tt.args.num); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Take() = %v, want %v", got, tt.want)
+			if got := Repeat(tt.args.done, tt.args.values...); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Repeat() = %v, want %v", got, tt.want)
 			}
 		})
 	}
