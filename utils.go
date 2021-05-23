@@ -4,6 +4,7 @@ import (
 	"reflect"
 )
 
+// Bridge gets all values coming from a stream of channels and streams them on a single channel
 func Bridge(done <-chan interface{}, chanStream <-chan <-chan interface{}) <-chan interface{} {
 	valStream := make(chan interface{})
 	go func() {
@@ -30,6 +31,8 @@ func Bridge(done <-chan interface{}, chanStream <-chan <-chan interface{}) <-cha
 	return valStream
 }
 
+// OrDone gets either reads from the input channel or returns if a
+// value is fed to the done channel
 func OrDone(done, c <-chan interface{}) <-chan interface{} {
 	valStream := make(chan interface{})
 	go func() {
@@ -52,7 +55,8 @@ func OrDone(done, c <-chan interface{}) <-chan interface{} {
 	return valStream
 }
 
-func Tee(done <-chan interface{}, in <-chan interface{}, receivers ...chan<- interface{}) {
+// Tee demultiplexes a channel into multiple receivers
+func Tee(in <-chan interface{}, receivers ...chan<- interface{}) {
 	cases := make([]reflect.SelectCase, len(receivers))
 	go func() {
 		defer func() {
@@ -68,7 +72,7 @@ func Tee(done <-chan interface{}, in <-chan interface{}, receivers ...chan<- int
 				cases[i].Chan = reflect.ValueOf(receivers[i])
 				cases[i].Send = reflect.ValueOf(elem)
 			}
-			for _ = range cases {
+			for range cases {
 				chosen, _, _ := reflect.Select(cases)
 				cases[chosen].Chan = reflect.ValueOf(nil)
 			}
@@ -76,6 +80,9 @@ func Tee(done <-chan interface{}, in <-chan interface{}, receivers ...chan<- int
 	}()
 }
 
+// Take is a generator utility and best used in combination with Repeat
+// It reads a given number of values from a valueStream, but returns
+// early if a value is placed in the done channel.
 func Take(done <-chan interface{}, valueStream <-chan interface{}, num int) <-chan interface{} {
 	takeStream := make(chan interface{})
 	go func() {
@@ -84,13 +91,15 @@ func Take(done <-chan interface{}, valueStream <-chan interface{}, num int) <-ch
 			select {
 			case <-done:
 				return
-			case takeStream <- <-valueStream:
+			case in := <-valueStream:
+				takeStream <- in
 			}
 		}
 	}()
 	return takeStream
 }
 
+// Repeat will repeat the values you pass to it infinitely until a value is placed in the done channel.
 func Repeat(done <-chan interface{}, values ...interface{}) <-chan interface{} {
 	valueStream := make(chan interface{})
 	go func() {
