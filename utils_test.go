@@ -211,29 +211,8 @@ func TestTake(t *testing.T) {
 				}
 			} else {
 				if len(got) > 0 {
-					t.Error("Got values but shouldn't have")
+					t.Error("Take failed: Got values but shouldn't have")
 				}
-			}
-		})
-	}
-}
-
-func TestRepeat(t *testing.T) {
-	type args struct {
-		done   <-chan interface{}
-		values []interface{}
-	}
-	tests := []struct {
-		name string
-		args args
-		want <-chan interface{}
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := Repeat(tt.args.done, tt.args.values...); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Repeat() = %v, want %v", got, tt.want)
 			}
 		})
 	}
