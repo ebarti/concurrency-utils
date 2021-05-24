@@ -80,7 +80,7 @@ func Tee(in <-chan interface{}, receivers ...chan<- interface{}) {
 	}()
 }
 
-// TeeValue demultiplexes a channel into multiple receivers
+// TeeValue demultiplexes a value into multiple receivers
 func TeeValue(in interface{}, receivers ...chan<- interface{}) {
 	cases := make([]reflect.SelectCase, len(receivers))
 	for i := range cases {
