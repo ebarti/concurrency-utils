@@ -80,6 +80,22 @@ func Tee(in <-chan interface{}, receivers ...chan<- interface{}) {
 	}()
 }
 
+// TeeValue demultiplexes a channel into multiple receivers
+func TeeValue(in interface{}, receivers ...chan<- interface{}) {
+	cases := make([]reflect.SelectCase, len(receivers))
+	for i := range cases {
+		cases[i].Dir = reflect.SelectSend
+	}
+	for i := range cases {
+		cases[i].Chan = reflect.ValueOf(receivers[i])
+		cases[i].Send = reflect.ValueOf(in)
+	}
+	for range cases {
+		chosen, _, _ := reflect.Select(cases)
+		cases[chosen].Chan = reflect.ValueOf(nil)
+	}
+}
+
 // Take is a generator utility and best used in combination with Repeat
 // It reads a given number of values from a valueStream, but returns
 // early if a value is placed in the done channel.
