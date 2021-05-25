@@ -80,6 +80,43 @@ func Tee(in <-chan interface{}, receivers ...chan<- interface{}) {
 	}()
 }
 
+// TeeWithType demultiplexes a channel into multiple receivers
+func TeeWithType(in <-chan interface{}, receivers map[reflect.Type][]chan interface{}) {
+	typedCases := make(map[reflect.Type][]reflect.SelectCase)
+	for t, chans := range receivers {
+		cases := make([]reflect.SelectCase, len(chans))
+		for i := range cases {
+			cases[i].Dir = reflect.SelectSend
+		}
+		typedCases[t] = cases
+	}
+	go func() {
+		for elem := range in {
+			selectedType := reflect.TypeOf(nil)
+			selectedCases := typedCases[selectedType]
+			for k, t := range typedCases {
+				if k == reflect.TypeOf(elem) {
+					selectedCases = t
+					selectedType = k
+					break
+				}
+			}
+			if selectedCases == nil || len(selectedCases) == 0 {
+				panic("could not locate chan")
+			}
+
+			for i := range selectedCases {
+				selectedCases[i].Chan = reflect.ValueOf(receivers[selectedType][i])
+				selectedCases[i].Send = reflect.ValueOf(elem)
+			}
+			for range selectedCases {
+				chosen, _, _ := reflect.Select(selectedCases)
+				selectedCases[chosen].Chan = reflect.ValueOf(nil)
+			}
+		}
+	}()
+}
+
 // TeeValue demultiplexes a value into multiple receivers
 func TeeValue(in interface{}, receivers ...chan<- interface{}) {
 	cases := make([]reflect.SelectCase, len(receivers))
