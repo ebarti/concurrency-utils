@@ -1,4 +1,4 @@
-package concurrencyutils
+package utils
 
 import (
 	"reflect"
@@ -51,16 +51,53 @@ func TestTee(t *testing.T) {
 		c4v = append(c4v, <-c4)
 	}
 	if len(c1v) != 10 {
-		t.Errorf("Tee test failed. Channel 1 expected 10 values but received only %d", len(c1v))
+		t.Errorf("Tee test failed. Channel 1 expected 10 values but received %d", len(c1v))
 	}
 	if len(c2v) != 10 {
-		t.Errorf("Tee test failed. Channel 2 expected 10 values but received only %d", len(c2v))
+		t.Errorf("Tee test failed. Channel 2 expected 10 values but received %d", len(c2v))
 	}
 	if len(c3v) != 10 {
-		t.Errorf("Tee test failed. Channel 3 expected 10 values but received only %d", len(c3v))
+		t.Errorf("Tee test failed. Channel 3 expected 10 values but received %d", len(c3v))
 	}
 	if len(c4v) != 10 {
-		t.Errorf("Tee test failed. Channel 4 expected 10 values but received only %d", len(c4v))
+		t.Errorf("Tee test failed. Channel 4 expected 10 values but received %d", len(c4v))
+	}
+}
+
+func TestTeeValue(t *testing.T) {
+	c1, c2, c3, c4 := make(chan interface{}, 20), make(chan interface{}, 20), make(chan interface{}, 20), make(chan interface{}, 20)
+	var c1v, c2v, c3v, c4v []interface{}
+	TeeValue(1, c1, c2)
+	TeeValue(2, c1, c2)
+	TeeValue(3, c1, c2)
+	TeeValue(4, c1, c2)
+	TeeValue(5, c1, c2)
+	TeeValue(6, c3, c4)
+	TeeValue(7, c3, c4)
+	TeeValue(8, c3, c4)
+	TeeValue(9, c3, c4)
+	TeeValue(10, c3, c4)
+	close(c1)
+	close(c2)
+	close(c3)
+	close(c4)
+	for c := range c1 {
+		c1v = append(c1v, c)
+		c2v = append(c2v, <-c2)
+		c3v = append(c3v, <-c3)
+		c4v = append(c4v, <-c4)
+	}
+	if len(c1v) != 5 {
+		t.Errorf("Tee test failed. Channel 1 expected 5 values but received %d", len(c1v))
+	}
+	if len(c2v) != 5 {
+		t.Errorf("Tee test failed. Channel 2 expected 5 values but received %d", len(c2v))
+	}
+	if len(c3v) != 5 {
+		t.Errorf("Tee test failed. Channel 3 expected 5 values but received %d", len(c3v))
+	}
+	if len(c4v) != 5 {
+		t.Errorf("Tee test failed. Channel 4 expected 5 values but received %d", len(c4v))
 	}
 }
 
