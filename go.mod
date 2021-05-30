@@ -1,1 +1,1 @@
-module "github.com/ebarti/concurrencyutils"
+module "github.com/ebarti/utils"
