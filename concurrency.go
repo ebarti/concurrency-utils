@@ -1,16 +1,12 @@
 package utils
 
-import (
-	"reflect"
-)
-
 // Bridge gets all values coming from a stream of channels and streams them on a single channel
-func Bridge(done <-chan interface{}, chanStream <-chan <-chan interface{}) <-chan interface{} {
-	valStream := make(chan interface{})
+func Bridge[T any, V ~chan T](done chan T, chanStream chan V) chan T {
+	valStream := make(chan T)
 	go func() {
 		defer close(valStream)
 		for {
-			var stream <-chan interface{}
+			var stream chan T
 			select {
 			case maybeStream, ok := <-chanStream:
 				if ok == false {
@@ -20,7 +16,7 @@ func Bridge(done <-chan interface{}, chanStream <-chan <-chan interface{}) <-cha
 			case <-done:
 				return
 			}
-			for val := range OrDone(done, stream) {
+			for val := range OrDone[T](done, stream) {
 				select {
 				case valStream <- val:
 				case <-done:
@@ -33,8 +29,8 @@ func Bridge(done <-chan interface{}, chanStream <-chan <-chan interface{}) <-cha
 
 // OrDone gets either reads from the input channel or returns if a
 // value is fed to the done channel
-func OrDone(done, c <-chan interface{}) <-chan interface{} {
-	valStream := make(chan interface{})
+func OrDone[T any](done, c chan T) chan T {
+	valStream := make(chan T)
 	go func() {
 		defer close(valStream)
 		for {
@@ -56,51 +52,33 @@ func OrDone(done, c <-chan interface{}) <-chan interface{} {
 }
 
 // Tee de-multiplexes a channel into multiple receivers
-func Tee(in <-chan interface{}, receivers ...chan<- interface{}) {
-	cases := make([]reflect.SelectCase, len(receivers))
+func Tee[T any](in chan T, receivers ...chan T) {
 	go func() {
 		defer func() {
 			for i := range receivers {
 				close(receivers[i])
 			}
 		}()
-		for i := range cases {
-			cases[i].Dir = reflect.SelectSend
-		}
 		for elem := range in {
-			for i := range cases {
-				cases[i].Chan = reflect.ValueOf(receivers[i])
-				cases[i].Send = reflect.ValueOf(elem)
-			}
-			for range cases {
-				chosen, _, _ := reflect.Select(cases)
-				cases[chosen].Chan = reflect.ValueOf(nil)
+			for ii := 0; ii < len(receivers); ii++ {
+				receivers[ii] <- elem
 			}
 		}
 	}()
 }
 
 // TeeValue de-multiplexes a value into multiple receivers
-func TeeValue(in interface{}, receivers ...chan interface{}) {
-	cases := make([]reflect.SelectCase, len(receivers))
-	for i := range cases {
-		cases[i].Dir = reflect.SelectSend
-	}
-	for i := range cases {
-		cases[i].Chan = reflect.ValueOf(receivers[i])
-		cases[i].Send = reflect.ValueOf(in)
-	}
-	for range cases {
-		chosen, _, _ := reflect.Select(cases)
-		cases[chosen].Chan = reflect.ValueOf(nil)
+func TeeValue[T any](in T, receivers ...chan T) {
+	for ii := 0; ii < len(receivers); ii++ {
+		receivers[ii] <- in
 	}
 }
 
 // Take is a generator utility and best used in combination with Repeat
 // It reads a given number of values from a valueStream, but returns
 // early if a value is placed in the done channel.
-func Take(done <-chan interface{}, valueStream <-chan interface{}, num int) <-chan interface{} {
-	takeStream := make(chan interface{})
+func Take[S, T any](done chan S, valueStream chan T, num int) chan T {
+	takeStream := make(chan T)
 	go func() {
 		defer close(takeStream)
 		for i := 0; i < num; i++ {
@@ -116,16 +94,16 @@ func Take(done <-chan interface{}, valueStream <-chan interface{}, num int) <-ch
 }
 
 // Repeat will repeat the values you pass to it infinitely until a value is placed in the done channel.
-func Repeat(done <-chan interface{}, values ...interface{}) <-chan interface{} {
-	valueStream := make(chan interface{})
+func Repeat[T any](done <-chan interface{}, v []T) <-chan T {
+	valueStream := make(chan T)
 	go func() {
 		defer close(valueStream)
 		for {
-			for _, v := range values {
+			for _, val := range v {
 				select {
 				case <-done:
 					return
-				case valueStream <- v:
+				case valueStream <- val:
 				}
 			}
 		}

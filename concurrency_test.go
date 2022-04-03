@@ -1,17 +1,19 @@
 package utils
 
 import (
+	"go.uber.org/goleak"
 	"reflect"
 	"testing"
 )
 
 func TestBridge(t *testing.T) {
-	genVals := func() <-chan <-chan interface{} {
-		chanStream := make(chan (<-chan interface{}))
+	defer goleak.VerifyNone(t)
+	genVals := func() chan chan int {
+		chanStream := make(chan (chan int))
 		go func() {
 			defer close(chanStream)
 			for i := 0; i < 10; i++ {
-				stream := make(chan interface{}, 1)
+				stream := make(chan int, 1)
 				stream <- i
 				close(stream)
 				chanStream <- stream
@@ -30,8 +32,9 @@ func TestBridge(t *testing.T) {
 }
 
 func TestTee(t *testing.T) {
-	genVals := func() <-chan interface{} {
-		retChan := make(chan interface{})
+	defer goleak.VerifyNone(t)
+	genVals := func() chan int {
+		retChan := make(chan int)
 		go func() {
 			defer close(retChan)
 			for i := 0; i < 10; i++ {
@@ -41,8 +44,8 @@ func TestTee(t *testing.T) {
 		return retChan
 	}
 
-	c1, c2, c3, c4 := make(chan interface{}), make(chan interface{}), make(chan interface{}), make(chan interface{})
-	var c1v, c2v, c3v, c4v []interface{}
+	c1, c2, c3, c4 := make(chan int), make(chan int), make(chan int), make(chan int)
+	var c1v, c2v, c3v, c4v []int
 	Tee(genVals(), c1, c2, c3, c4)
 	for c := range c1 {
 		c1v = append(c1v, c)
@@ -65,8 +68,9 @@ func TestTee(t *testing.T) {
 }
 
 func TestTeeValue(t *testing.T) {
-	c1, c2, c3, c4 := make(chan interface{}, 20), make(chan interface{}, 20), make(chan interface{}, 20), make(chan interface{}, 20)
-	var c1v, c2v, c3v, c4v []interface{}
+	defer goleak.VerifyNone(t)
+	c1, c2, c3, c4 := make(chan int, 20), make(chan int, 20), make(chan int, 20), make(chan int, 20)
+	var c1v, c2v, c3v, c4v []int
 	TeeValue(1, c1, c2)
 	TeeValue(2, c1, c2)
 	TeeValue(3, c1, c2)
@@ -102,43 +106,44 @@ func TestTeeValue(t *testing.T) {
 }
 
 func TestOrDone(t *testing.T) {
+	defer goleak.VerifyNone(t)
 	type args struct {
 		sendDoneAtIdx int
-		c             []interface{}
+		c             []int
 	}
 	tests := []struct {
 		name string
 		args args
-		want []interface{}
+		want []int
 	}{
 		{
 			name: "Test never done",
 			args: args{
 				sendDoneAtIdx: -1,
-				c:             []interface{}{0, 1, 2, 3, 4, 5, 6, 7},
+				c:             []int{0, 1, 2, 3, 4, 5, 6, 7},
 			},
-			want: []interface{}{0, 1, 2, 3, 4, 5, 6, 7},
+			want: []int{0, 1, 2, 3, 4, 5, 6, 7},
 		},
 		{
 			name: "Test done in between",
 			args: args{
 				sendDoneAtIdx: 4,
-				c:             []interface{}{0, 1, 2, 3, 4, 5, 6, 7},
+				c:             []int{0, 1, 2, 3, 4, 5, 6, 7},
 			},
-			want: []interface{}{0, 1, 2, 3, 4},
+			want: []int{0, 1, 2, 3, 4},
 		},
 		{
 			name: "Test done",
 			args: args{
 				sendDoneAtIdx: 0,
-				c:             []interface{}{0, 1, 2, 3, 4, 5, 6, 7},
+				c:             []int{0, 1, 2, 3, 4, 5, 6, 7},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			done := make(chan interface{})
-			c := make(chan interface{})
+			done := make(chan int)
+			c := make(chan int)
 			go func() {
 				defer func() {
 					close(done)
@@ -171,9 +176,10 @@ func TestOrDone(t *testing.T) {
 }
 
 func TestTake(t *testing.T) {
-	valueStreamFn := func(doneAtIdx int, value interface{}) (_, _ <-chan interface{}) {
-		valueStream := make(chan interface{}, 1)
-		doneStream := make(chan interface{}, 1)
+	defer goleak.VerifyNone(t)
+	valueStreamFn := func(doneAtIdx int, value int) (_, _ chan int) {
+		valueStream := make(chan int, 1)
+		doneStream := make(chan int, 1)
 
 		go func() {
 			defer func() {
@@ -197,13 +203,13 @@ func TestTake(t *testing.T) {
 	}
 	type args struct {
 		sendDoneAtIdx int
-		value         interface{}
+		value         int
 		num           int
 	}
 	tests := []struct {
 		name string
 		args args
-		want []interface{}
+		want []int
 	}{
 		{
 			name: "When done takes no values",
@@ -217,11 +223,11 @@ func TestTake(t *testing.T) {
 		{
 			name: "When never done takes all values",
 			args: args{
-				sendDoneAtIdx: -1,
+				sendDoneAtIdx: 9,
 				value:         0,
 				num:           10,
 			},
-			want: []interface{}{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			want: []int{0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 		},
 		{
 			name: "When done in the middle takes only values up to done",
@@ -230,7 +236,7 @@ func TestTake(t *testing.T) {
 				value:         0,
 				num:           10,
 			},
-			want: []interface{}{0, 0, 0, 0, 0},
+			want: []int{0, 0, 0, 0, 0},
 		},
 	}
 	for _, tt := range tests {
@@ -249,6 +255,9 @@ func TestTake(t *testing.T) {
 			} else {
 				if len(got) > 0 {
 					t.Error("Take failed: Got values but shouldn't have")
+				}
+				for gotValue := range got {
+					_ = gotValue
 				}
 			}
 		})
